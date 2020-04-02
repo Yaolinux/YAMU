@@ -1,0 +1,128 @@
+#!/bin/bash
+
+source_download() {
+	_information $prefix "Téléchargement de la source"
+	cd $build_arbo/$NAME/sources
+	for i in "${URL[@]}"; 
+	do
+		wget -c --no-check-certificate $i
+	done	
+		
+}
+
+source_decompress() {
+	_information $prefix "Décompression des sources"
+	cd $build_arbo/$NAME/sources
+	for tarball in $TAR;
+	do
+		tar xf $tarball -C $build_arbo/$NAME/build
+	done
+}
+source_postdecompress() {
+	_information $prefix "Vérification des sources"
+	cd $build_arbo/$NAME/sources
+	for tarball in $TAR;
+	do
+		folder_pkg=$(tar tf $tarball | head -1)
+	done
+}
+
+package_pack() {
+	_information $prefix "Empaquetage du paquet"
+	cd $package_dir
+	_information $prefix "Création de l'arborescence du paquet"
+	tar -cf $NAME-$VERSION.tar *
+	tar -tf $NAME-$VERSION.tar > .PACKTREE
+	rm -r $NAME-$VERSION.tar
+	_information $prefix "Création de l'archive du paquet"
+	tar --zstd -cf $NAME-$VERSION.tar.zst * .PACKTREE
+}
+
+build_init() {
+	_information $prefix "Suppression des anciens dossiers"
+	if [ -d "${build_arbo}/${NAME}" ];
+	then
+		rm -rf $build_arbo/$NAME/
+	fi
+	
+	_information $prefix "Création des dossiers necessaire à la compilation"
+	
+	mkdir -pv $build_arbo/$NAME/
+	mkdir -pv $build_arbo/$NAME/sources
+	mkdir -pv $build_arbo/$NAME/build
+	mkdir -pv $build_arbo/$NAME/package
+}
+
+_information() {
+	green='\e[0;32m'
+	normal='\e[0m'
+	echo -e "${green}==> $@ ${normal}"
+}
+
+_warning() {
+	green='\e[0;33m'
+	normal='\e[0m'
+	echo -e "${green}==> $@ ${normal}"
+}
+
+help() {
+	echo -e "Aide pour yambuild :"
+	echo -e "--download ou -do : Permet de télécharger les sources et initalise l'arborescence de compilation"
+	echo -e "--decompress ou -de : Décompresser les sources"
+	echo -e "--prepare ou -p : Lance la fonction prepare du build"
+	echo -e "--make ou -m : Lance la fonction make du build"
+	echo -e "--check ou -c : Lance la fonction check du build"
+	echo -e "--install ou -i : Lance la fonction install du build"
+}
+
+
+
+prefix="YAMBUILD"
+
+buildfile=$1
+option=$2
+
+source $1
+
+build_arbo=/tmp/yambuild
+build_dir=/tmp/yambuild/$NAME/build
+package_dir=/tmp/yambuild/$NAME/package
+
+case $2 in
+"--download" | "-do")
+	build_init
+	source_download
+	;;
+"--decompress" | "-de")
+	source_decompress
+	source_postdecompress
+	;;
+"--prepare" | "-p")
+	do_prepare
+	;;
+"--make" | "-m")
+	do_make
+	;;
+"--check" | "-c")
+	do_check
+	;;
+"--install" | "-i")
+	PACKDIR=/$build_arbo/package
+	do_install
+	;;
+"--build" | "-b")
+	build_init
+	source_download
+	source_decompress
+	source_postdecompress
+	cd $build_dir/$folder_pkg
+	PACKDIR=$package_dir
+	do_prepare
+	do_make
+	do_install
+	package_pack
+	;;
+*)
+	help
+	;;
+esac
