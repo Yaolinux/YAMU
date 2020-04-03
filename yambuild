@@ -5,19 +5,40 @@ source_download() {
 	cd $build_arbo/$NAME/sources
 	for i in "${URL[@]}"; 
 	do
-		wget -c --no-check-certificate $i
-	done	
-		
+		case $i in
+			http://*|https://*|ftp://*)
+				wget -c $i
+				if [[ $? != 0 ]]; then
+					_warning $prefix "Le certificat de la source n'est pas correct."
+					wget -c --no-check-certificate $i
+				fi
+				;;
+			*)
+				cp -rvf $basedir/$i $build_dir
+				;;
+		esac
+
+		SRCNAME+=" ${i##*/}"
+	done		
 }
 
 source_decompress() {
 	_information $prefix "Décompression des sources"
 	cd $build_arbo/$NAME/sources
-	for tarball in $TAR;
+	for tarball in ${SRCNAME[@]};
 	do
-		tar xf $tarball -C $build_arbo/$NAME/build
+		case $tarball in
+			*.tar|*.tar.gz|*.tar.Z|*.tgz|*.tar.bz2|*.tbz2|*.tbz|*.tar.xz|*.txz|*.tar.lzma|*.tar.lz)
+				tar xf $tarball -C $build_arbo/$NAME/build
+				;;
+			*)
+				_warning $prefix "Fichier ou archive ${tarball} non pris en charge"
+				;;
+
+		esac
 	done
 }
+
 source_postdecompress() {
 	_information $prefix "Vérification des sources"
 	cd $build_arbo/$NAME/sources
@@ -31,14 +52,95 @@ package_pack() {
 	_information $prefix "Empaquetage du paquet"
 	cd $package_dir
 	_information $prefix "Création de l'arborescence du paquet"
-	tar -cf $NAME-$VERSION.tar *
-	tar -tf $NAME-$VERSION.tar > .PACKTREE
-	rm -r $NAME-$VERSION.tar
+	tar --no-same-owner -cf $NAME-$VERSION-$RELEASE.tar *
+	tar -tf $NAME-$VERSION-$RELEASE.tar > .PACKTREE
+	tar -rf $NAME-$VERSION-$RELEASE.tar .PACKTREE
 	_information $prefix "Création de l'archive du paquet"
-	tar --zstd -cf $NAME-$VERSION.tar.zst * .PACKTREE
+	zstd --rm $NAME-$VERSION-$RELEASE.tar
+}
+
+package_move_depot() {
+	_information $prefix "Déplacement du binaire dans le dépot local"
+	if [ ! -d $PKG_DEPOT/$NAME ]; then
+		mkdir $PKG_DEPOT/$NAME
+	else
+		rm -rf $PKG_DEPOT/$NAME/*
+	fi
+	mv -fv $package_dir/$NAME-$VERSION-$RELEASE.tar.zst $PKG_DEPOT/$NAME
+}
+
+build_check() {
+	_information $prefix "Vérification du fichier build"
+	if [ -z $NAME ]; then _error $prefix "Variable NAME vide"; exit 100; fi
+	if [ -z $VERSION ]; then _error $prefix "Variable VERSION vide"; exit 101; fi
+	#[ -z $URL ] && _error $prefix "Variable URL vide"; exit 102
+	if [ -z $RELEASE ]; then RELEASE=1; fi
+	if [ -z $DEPENDS ]; then _information $prefix "Paquet sans dépendances"; fi
+}
+
+
+pkg_build() {
+	build_init
+	build_check
+	source_download
+	if [[ $? != 0 ]]; then
+		_error $prefix "Merci de vérifier l'url de la source."
+		exit 1
+	fi
+	source_decompress
+	if [[ $? != 0 ]]; then
+		_error $prefix "Merci de vérifier l'archive de la source."
+		exit 2
+	fi
+	source_postdecompress
+	if [[ $? != 0 ]]; then
+		_error $prefix "Erreur sur la post décompression."
+		exit 3
+	fi
+	cd $build_dir/
+	if [[ $? != 0 ]]; then
+		_error $prefix "Le dossier contentant les sources est inexistant."
+		exit 4
+	fi
+	PACKDIR=$package_dir
+	do_prepare
+	if [[ $? != 0 ]]; then
+		_error $prefix "Erreur sur la préparation de la recette. Merci de vérifier la fonction do_prepare."
+		exit 5
+	fi
+	do_build
+	if [[ $? != 0 ]]; then
+		_error $prefix "Erreur sur la compilation de la recette. Merci de vérifier la fonction do_build."
+		exit 6
+	fi
+	do_install
+	if [[ $? != 0 ]]; then
+		_error $prefix "Erreur sur l'installation du paquet. Merci de vérifier la fonction do_install."
+		exit 7
+	fi
+	package_pack
+	if [[ $? != 0 ]]; then
+		_error $prefix "Erreur sur l'empaquetage du paquet."
+		exit 8
+	fi
+	package_move_depot
+	if [[ $? != 0 ]]; then
+		_error $prefix "Impossible de déplacer le binaire dans le dépôt. Merci de verifier les droits"
+		exit 9
+	fi
+
 }
 
 build_init() {
+	_information $prefix "Vérification des droits"
+	if [ ! -d /var/pkg ]; then
+		_error $prefix "Le dossier /var/pkg n'existe pas, merci de le créer"
+		exit 10
+	elif [  ! -w /var/pkg ]; then
+		_error $prefix "Le dossier /var/pkg n''est pas inscriptible, merci de vérifier les droits"
+		exit 11
+	fi
+	
 	_information $prefix "Suppression des anciens dossiers"
 	if [ -d "${build_arbo}/${NAME}" ];
 	then
@@ -51,18 +153,9 @@ build_init() {
 	mkdir -pv $build_arbo/$NAME/sources
 	mkdir -pv $build_arbo/$NAME/build
 	mkdir -pv $build_arbo/$NAME/package
-}
+	
 
-_information() {
-	green='\e[0;32m'
-	normal='\e[0m'
-	echo -e "${green}==> $@ ${normal}"
-}
 
-_warning() {
-	green='\e[0;33m'
-	normal='\e[0m'
-	echo -e "${green}==> $@ ${normal}"
 }
 
 help() {
@@ -75,18 +168,26 @@ help() {
 	echo -e "--install ou -i : Lance la fonction install du build"
 }
 
-
-
 prefix="YAMBUILD"
 
-buildfile=$1
+basedir=$PWD/$1
+buildfile=$1/build
 option=$2
 
-source $1
+source yamutils
+source $buildfile
 
-build_arbo=/tmp/yambuild
-build_dir=/tmp/yambuild/$NAME/build
-package_dir=/tmp/yambuild/$NAME/package
+SRCNAME=""
+PKG_DEPOT="/var/pkg"
+user_dir=$(echo $HOME)
+build_arbo=$user_dir/yambuild
+build_dir=$user_dir/yambuild/$NAME/build
+package_dir=$user_dir/yambuild/$NAME/package
+
+if [[ $user_dir == "/root" ]]; then
+	_error $prefix "La compilation ne fait pas en root !"
+	exit 9
+fi
 
 case $2 in
 "--download" | "-do")
@@ -111,16 +212,7 @@ case $2 in
 	do_install
 	;;
 "--build" | "-b")
-	build_init
-	source_download
-	source_decompress
-	source_postdecompress
-	cd $build_dir/$folder_pkg
-	PACKDIR=$package_dir
-	do_prepare
-	do_make
-	do_install
-	package_pack
+	pkg_build
 	;;
 *)
 	help
