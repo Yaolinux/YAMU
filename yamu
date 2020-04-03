@@ -1,0 +1,119 @@
+#! /bin/bash
+#YAMU : Yaolinux Application Manage Unit
+#Writed by : Yaolinux TEAM
+#Created at : 03/04/2020
+#Modified at : 03/04/2020
+
+help() {
+	echo -e "Aide pour YAMU :"
+	echo -e "Usage : yamu <actions> [paquet]"
+	echo -e "Liste des actions :"
+	echo -e "--help ou -h : Affiche l'aide de YAMU"
+	echo -e "--install ou -i : Install le paquet"
+	echo -e "--remove ou -r : Desintalle un paquet"
+}
+
+is_root() {
+	YAMU_USER_EUID=$(echo $EUID)
+	if [ $YAMU_USER_EUID -ne 0 ]; then
+		_error $YAMU_PREFIX "Veuillez executer cette comande en root ou sudo"
+		exit 1
+	fi
+}
+
+verify_existed_package() {
+
+	if [ ! -d $YAMU_PKG/$YAMU_PACKAGE ]; then
+		_error $YAMU_PREFIX "Le paquet ${YAMU_PACKAGE} n'est pas existant"
+		exit 2
+	fi
+}
+
+package_exist_in_db() {
+
+	if [ -d $YAMU_DB/$YAMU_PACKAGE ]; then
+		_error $YAMU_PREFIX "Le paquet ${YAMU_PACKAGE} est déjà installé"
+		exit 3
+	fi
+}
+
+package_install() {
+	_information $YAMU_PREFIX "Installation du paquet ${YAMU_PACKAGE}"
+	mkdir $YAMU_DB/$YAMU_PACKAGE
+	if [ $? != 0 ]; then
+		_error $YAMU_PREFIX "Il est impossible de créer le dossier du paquet dans la base de donnée"
+		exit 4
+	fi
+	_information $YAMU_PREFIX "Décompression du paquet binaire"
+	tar --no-same-owner -xaf $YAMU_PKG/$YAMU_PACKAGE/$YAMU_PACKGE*.tar.zst -C /
+	mv /.PACKTREE $YAMU_DB/$YAMU_PACKAGE
+	ldconfig -r /
+}
+
+package_remove() {
+	_information $YAMU_PREFIX "Désinstallation du paquet ${YAMU_PACKAE}"
+	YAMU_PACKTREE=$YAMU_DB/$YAMU_PACKAGE/.PACKTREE
+	if [ ! -e $YAMU_PACKTREE ]; then
+		_error $YAMU_PREFIX "le fichier .PACKTREE n'éxiste pas"
+		exit 5
+	fi
+	#cat $YAMU_PACKTREE | while read LINE; do
+	for LINE in $(cat $YAMU_PACKTREE | sort -r); do 
+		LINE="/${LINE}"
+		if [ -f $LINE ]; then
+			rm $LINE > /dev/null 2>&1
+		elif [ -L $LINE ]; then
+			unlink $LINE > /dev/null 2>&1
+		elif [ -d $LINE ]; then
+			rmdir $LINE > /dev/null 2>&1
+		fi
+	done
+	rm -r $YAMU_DB/$YAMU_PACKAGE
+
+}
+
+create_database_folder() { :
+	if [ ! -d $YAMU_DB ]; then
+		mkdir -v $YAMU_DB
+	fi
+}
+
+source yamutils
+
+YAMU_ACTION=$1
+YAMU_PACKAGE=$2
+YAMU_DB=/var/db
+YAMU_PKG=/var/pkg
+
+
+case $YAMU_ACTION in
+	"--install" | "-i")
+		is_root
+		create_database_folder
+		verify_existed_package
+		package_exist_in_db
+		package_install
+		if [ $? == 0 ]; then
+			_information $YAMU_PREFIX "Le paquet ${YAMU_PACKAGE} a été installé avec succès"
+		else
+			_error $YAMU_PREFIX "Le paquet ${YAMU_PACKAGE} n'a pas pu être installé"
+	       	fi
+		;;
+	"--remove" | "-r")
+		echo -e "Remove package"
+		is_root
+		verify_existed_package
+		package_remove
+		if [ $? == 0 ]; then
+			_information $YAMU_PREFIX "Le paquet ${YAMU_PACKAGE} a été désinstallé avec succès"
+		else
+			_error $YAMU_PREFIX "Le paquet ${YAMU_PACKAGE} n'a pas pu être désinstallé"
+		fi
+		;;
+	"--help" | "-h")
+		help
+		;;
+	*)
+		help
+		;;
+esac

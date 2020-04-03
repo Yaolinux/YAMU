@@ -1,0 +1,26 @@
+#! /bin/bash
+#YAMUTILS : Tools for YAMU
+#Write by : Yaolinux TEAM
+#Created at : 03/04/2020
+#Modified at : 03/04/2020
+
+_information() {
+	green='\e[0;32m'
+	normal='\e[0m'
+	echo -e "${green}==> $@ ${normal}"
+}
+
+_warning() {
+	yellow='\e[0;33m'
+	normal='\e[0m'
+	echo -e "${yellow}==> $@ ${normal}"
+}
+
+_error() {
+	red='\e[0;31m'
+	normal='\e[0m'
+	echo -e "${red}==> $@ ${normal}"
+}
+
+
+YAMU_PREFIX="YAMU"
