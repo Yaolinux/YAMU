@@ -19,7 +19,7 @@ source_download() {
 		esac
 
 		SRCNAME+=" ${i##*/}"
-	done		
+	done
 }
 
 source_decompress() {
@@ -52,13 +52,21 @@ package_pack() {
 	_information $prefix "Empaquetage du paquet"
 	cd $package_dir
 	_information $prefix "Création de l'arborescence du paquet"
+
+	TARFILE=$NAME-$VERSION-$RELEASE.tar
+
 	tar --no-same-owner -cf $NAME-$VERSION-$RELEASE.tar *
-	tar -tf $NAME-$VERSION-$RELEASE.tar > .PACKTREE
-	tar -rf $NAME-$VERSION-$RELEASE.tar .PACKTREE
+	tar -tf $TARFILE > .PACKTREE
+	tar -rf $TARFILE .PACKMETA
+	tar -rf $TARFILE .PACKTREE
 	_information $prefix "Création de l'archive du paquet"
-	zstd --rm $NAME-$VERSION-$RELEASE.tar
+	zstd --rm $TARFILE
 }
 
+package_meta() {
+	cd $package_dir
+	echo "$NAME,$VERSION,$RELEASE" > .PACKMETA
+}
 package_move_depot() {
 	_information $prefix "Déplacement du binaire dans le dépot local"
 	if [ ! -d $PKG_DEPOT/$NAME ]; then
@@ -103,20 +111,37 @@ pkg_build() {
 		exit 4
 	fi
 	PACKDIR=$package_dir
-	do_prepare
-	if [[ $? != 0 ]]; then
-		_error $prefix "Erreur sur la préparation de la recette. Merci de vérifier la fonction do_prepare."
-		exit 5
+	#Verification de l'existance de la fonction do_prepare dans la recette.
+	if exist_function "do_prepare" ; then
+		do_prepare
+		if [[ $? != 0 ]]; then
+			_error $prefix "Erreur sur la préparation de la recette. Merci de vérifier la fonction do_prepare."
+			exit 5
+		fi
 	fi
 	do_build
 	if [[ $? != 0 ]]; then
 		_error $prefix "Erreur sur la compilation de la recette. Merci de vérifier la fonction do_build."
 		exit 6
 	fi
+	#Verification de l'existance de la fonction do_check dans la recette.
+	if exist_function "do_check" ; then
+		do_check
+		if [[ $? != 0 ]]; then
+                        _error $prefix "Erreur sur la préparation de la recette. Merci de vérifier la fonction do_prepare."
+                        exit 5
+                fi
+        fi
 	do_install
 	if [[ $? != 0 ]]; then
 		_error $prefix "Erreur sur l'installation du paquet. Merci de vérifier la fonction do_install."
 		exit 7
+	fi
+	unset -f do_install
+	package_meta
+	if [[ $? != 0 ]]; then
+		_error $prefix "Erreur sur la création du fichier .PACKMETA."
+		exit 8
 	fi
 	package_pack
 	if [[ $? != 0 ]]; then
@@ -132,6 +157,20 @@ pkg_build() {
 }
 
 build_init() {
+	_information $prefix "Verification de la présence des utilitaires obligatoires"
+	fakeroot -v > /dev/null 2>&1
+	if [ $? != 0 ]; then
+		_error $prefix "Merci de verifier la présence de Fakeroot"
+		exit 12
+	fi
+	_information $prefix "Chargement de la confiugration de YAMU"
+	source yamu.conf
+	if [ -z $MAKECORE ]; then
+		NBCORE=$(nproc)
+		export MAKEFLAGS="-j ${NBCORE}"
+	else
+		export MAKEFLAGS="-j ${MAKECORE}"
+	fi
 	_information $prefix "Vérification des droits"
 	if [ ! -d /var/pkg ]; then
 		_error $prefix "Le dossier /var/pkg n'existe pas, merci de le créer"
@@ -140,22 +179,33 @@ build_init() {
 		_error $prefix "Le dossier /var/pkg n''est pas inscriptible, merci de vérifier les droits"
 		exit 11
 	fi
-	
+
 	_information $prefix "Suppression des anciens dossiers"
 	if [ -d "${build_arbo}/${NAME}" ];
 	then
 		rm -rf $build_arbo/$NAME/
 	fi
-	
+
 	_information $prefix "Création des dossiers necessaire à la compilation"
-	
+
 	mkdir -pv $build_arbo/$NAME/
 	mkdir -pv $build_arbo/$NAME/sources
 	mkdir -pv $build_arbo/$NAME/build
 	mkdir -pv $build_arbo/$NAME/package
-	
+}
 
+check_build_file() {
+	_information $prefix "Verification du fichier build"
+	exist_function "do_build"
+	if [ $? != 0 ]; then
+		_error $prefix "Le fonction do_build doit être présente"
+		exit 13
+	fi
 
+}
+
+exist_function() {
+	declare -f "$1" > /dev/null
 }
 
 help() {
@@ -186,7 +236,7 @@ package_dir=$user_dir/yambuild/$NAME/package
 
 if [[ $user_dir == "/root" ]]; then
 	_error $prefix "La compilation ne fait pas en root !"
-	exit 9
+	#exit 9
 fi
 
 case $2 in
@@ -209,7 +259,8 @@ case $2 in
 	;;
 "--install" | "-i")
 	PACKDIR=/$build_arbo/package
-	do_install
+	export -f do_install
+	fakeroot /bin/bash -c "do_install"
 	;;
 "--build" | "-b")
 	pkg_build
