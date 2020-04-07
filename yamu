@@ -46,7 +46,7 @@ package_install() {
 	fi
 	_information $YAMU_PREFIX "Décompression du paquet binaire"
 	tar --no-same-owner -xaf $YAMU_PKG/$YAMU_PACKAGE/$YAMU_PACKGE*.tar.zst -C /
-	mv /.{PACKTREE,PACKMETA} $YAMU_DB/$YAMU_PACKAGE
+	mv /.PACKTREE $YAMU_DB/$YAMU_PACKAGE
 	ldconfig -r /
 }
 

@@ -3,21 +3,26 @@
 source_download() {
 	_information $prefix "Téléchargement de la source"
 	cd $build_arbo/$NAME/sources
-	for i in "${URL[@]}"; 
+	for i in "${URL[@]}";
 	do
-		case $i in
-			http://*|https://*|ftp://*)
-				wget -c $i
-				if [[ $? != 0 ]]; then
-					_warning $prefix "Le certificat de la source n'est pas correct."
-					wget -c --no-check-certificate $i
-				fi
-				;;
-			*)
-				cp -rvf $basedir/$i $build_dir
-				;;
-		esac
-
+		NAMESOURCE=" ${i##*/}"
+		if [ ! -e  ${NAMESOURCE} ]; then
+			case $i in
+				http://*|https://*|ftp://*)
+					wget -c $i
+					if [[ $? != 0 ]]; then
+						_warning $prefix "Le certificat de la source n'est pas correct."
+						wget -c --no-check-certificate $i
+					fi
+					;;
+				* | ".*")
+					_warning $prefix "Copie de la source ${NAMESOURCE} dans le dossier de compilation"
+					cp -rf $basedir/$i $build_dir
+					;;
+			esac
+		else
+			_information $prefix "La source est déjà éxistante"
+		fi
 		SRCNAME+=" ${i##*/}"
 	done
 }
@@ -32,7 +37,10 @@ source_decompress() {
 				tar xf $tarball -C $build_arbo/$NAME/build
 				;;
 			*)
-				_warning $prefix "Fichier ou archive ${tarball} non pris en charge"
+				#_warning $prefix "Fichier ou archive ${tarball} non pris en charge"
+				if [ $tarball == ".install" ]; then
+					cp -rf $build_dir/$tarball $package_dir
+				fi
 				;;
 
 		esac
@@ -51,22 +59,28 @@ source_postdecompress() {
 package_pack() {
 	_information $prefix "Empaquetage du paquet"
 	cd $package_dir
-	_information $prefix "Création de l'arborescence du paquet"
-
 	TARFILE=$NAME-$VERSION-$RELEASE.tar
-
 	tar --no-same-owner -cf $NAME-$VERSION-$RELEASE.tar *
+	if [ $? != 0 ]; then
+		_error $prefix "Erreur sur l'empaquetage, vérifier la fonction do_install"
+		exit 14
+	fi
+	_information $prefix "Création de l'arborescence du paquet"
 	tar -tf $TARFILE > .PACKTREE
 	tar -rf $TARFILE .PACKMETA
 	tar -rf $TARFILE .PACKTREE
+	if [ -f ".install" ]; then
+		tar -rf $TARFILE .install
+	fi
 	_information $prefix "Création de l'archive du paquet"
-	zstd --rm $TARFILE
+	zstd -q --rm $TARFILE
 }
 
 package_meta() {
 	cd $package_dir
 	echo "$NAME,$VERSION,$RELEASE" > .PACKMETA
 }
+
 package_move_depot() {
 	_information $prefix "Déplacement du binaire dans le dépot local"
 	if [ ! -d $PKG_DEPOT/$NAME ]; then
@@ -74,7 +88,7 @@ package_move_depot() {
 	else
 		rm -rf $PKG_DEPOT/$NAME/*
 	fi
-	mv -fv $package_dir/$NAME-$VERSION-$RELEASE.tar.zst $PKG_DEPOT/$NAME
+	mv -f $package_dir/$NAME-$VERSION-$RELEASE.tar.zst $PKG_DEPOT/$NAME
 }
 
 build_check() {
@@ -183,15 +197,16 @@ build_init() {
 	_information $prefix "Suppression des anciens dossiers"
 	if [ -d "${build_arbo}/${NAME}" ];
 	then
-		rm -rf $build_arbo/$NAME/
+		rm -rf $build_arbo/$NAME/{build,package}/*
+	else
+
+		_information $prefix "Création des dossiers necessaires à la compilation"
+
+		mkdir -pv $build_arbo/$NAME/
+		mkdir -pv $build_arbo/$NAME/sources
+		mkdir -pv $build_arbo/$NAME/build
+		mkdir -pv $build_arbo/$NAME/package
 	fi
-
-	_information $prefix "Création des dossiers necessaire à la compilation"
-
-	mkdir -pv $build_arbo/$NAME/
-	mkdir -pv $build_arbo/$NAME/sources
-	mkdir -pv $build_arbo/$NAME/build
-	mkdir -pv $build_arbo/$NAME/package
 }
 
 check_build_file() {
@@ -266,6 +281,6 @@ case $2 in
 	pkg_build
 	;;
 *)
-	help
+	pkg_build
 	;;
 esac
