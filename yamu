@@ -22,10 +22,16 @@ is_root() {
 }
 
 verify_existed_package() {
-
-	if [ ! -d $YAMU_PKG/$YAMU_PACKAGE ]; then
-		_error $YAMU_PREFIX "Le paquet ${YAMU_PACKAGE} n'est pas existant"
-		exit 2
+	if [ -z $1 ]; then
+		if [ ! -d $YAMU_PKG/$YAMU_PACKAGE ]; then
+			_error $YAMU_PREFIX "Le paquet ${YAMU_PACKAGE} n'est pas existant"
+			exit 2
+		fi
+	else
+		if [ ! -d $YAMU_PKG/$1 ]; then
+			_error $YAMU_PREFIX "Le paquet $1 n'est pas existant"
+			exit 2
+		fi
 	fi
 }
 
@@ -37,16 +43,66 @@ package_exist_in_db() {
 	fi
 }
 
-package_install() {
-	_information $YAMU_PREFIX "Installation du paquet ${YAMU_PACKAGE}"
-	mkdir $YAMU_DB/$YAMU_PACKAGE
-	if [ $? != 0 ]; then
-		_error $YAMU_PREFIX "Il est impossible de créer le dossier du paquet dans la base de donnée"
-		exit 4
+
+#
+# Recherche les dependances d'execution du paquet
+# Retourne RUNTIMEDEPEND : Tableau des dependances d'execution
+#
+get_runtime_dependancies() {
+	_information $YAMU_PREFIX "Recherche des dépendances d'execution"
+	cd $YAMU_PKG/$YAMU_PACKAGE
+	PACKMETA=$(tar -Oxf $YAMU_PACKAGE-*.tar.zst .PACKMETA)
+	METARUNTIMEDEPEND=$(echo $PACKMETA | cut -d "," -f 4)
+	IFS=" "
+	read -ra RUNTIMEDEPEND <<< "$METARUNTIMEDEPEND"
+	unset IFS
+}
+
+#
+# Installe les dependances d'execution du paquet
+# Retourne $? = 0
+#
+install_runtime_dependancies() {
+	if [[ ! -z $RUNTIMEDEPEND ]]; then
+		for package in "${RUNTIMEDEPEND[@]}"
+		do
+			create_database_folder 
+			verify_existed_package $package
+			if [ ! -d $YAMU_DB/$package ]; then
+				package_install $package
+				if [ $? == 0 ]; then
+					_information $YAMU_PREFIX "La dépendance ${package} a été installé avec succès"
+				else
+					_error $YAMU_PREFIX "La dépendance ${package} n'a pas pu être installé"
+			    fi
+			fi	
+		done
 	fi
-	_information $YAMU_PREFIX "Décompression du paquet binaire"
-	tar --no-same-owner -xaf $YAMU_PKG/$YAMU_PACKAGE/$YAMU_PACKGE*.tar.zst -C /
-	mv /.PACKTREE $YAMU_DB/$YAMU_PACKAGE
+	
+}
+
+package_install() {
+	if [ -z $1 ]; then
+		_information $YAMU_PREFIX "Installation du paquet ${YAMU_PACKAGE}"
+		mkdir $YAMU_DB/$YAMU_PACKAGE
+		if [ $? != 0 ]; then
+			_error $YAMU_PREFIX "Il est impossible de créer le dossier du paquet dans la base de donnée"
+			exit 4
+		fi
+		_information $YAMU_PREFIX "Décompression du paquet binaire"
+		tar --no-same-owner -xaf $YAMU_PKG/$YAMU_PACKAGE/$YAMU_PACKGE*.tar.zst -C /
+		mv /.PACKTREE $YAMU_DB/$YAMU_PACKAGE
+	else
+		_information $YAMU_PREFIX "Installation du paquet $1"
+		mkdir $YAMU_DB/$1
+		if [ $? != 0 ]; then
+			_error $YAMU_PREFIX "Il est impossible de créer le dossier du paquet dans la base de donnée"
+			exit 4
+		fi
+		_information $YAMU_PREFIX "Décompression du paquet binaire"
+		tar --no-same-owner -xaf $YAMU_PKG/$1/$YAMU_PACKGE*.tar.zst -C /
+		mv /.PACKTREE $YAMU_DB/$1
+	fi
 	ldconfig -r /
 }
 
@@ -72,7 +128,7 @@ package_remove() {
 
 }
 
-create_database_folder() { :
+create_database_folder() {
 	if [ ! -d $YAMU_DB ]; then
 		mkdir -v $YAMU_DB
 	fi
@@ -92,6 +148,8 @@ case $YAMU_ACTION in
 		create_database_folder
 		verify_existed_package
 		package_exist_in_db
+		get_runtime_dependancies
+		install_runtime_dependancies
 		package_install
 		if [ $? == 0 ]; then
 			_information $YAMU_PREFIX "Le paquet ${YAMU_PACKAGE} a été installé avec succès"
