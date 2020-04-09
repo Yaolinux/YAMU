@@ -1,4 +1,8 @@
 #!/bin/bash
+# YAMBUILD : 
+# Created by : Yaolinux Team
+# Created at : 30/04/2020
+# Modified at : 08/04/2020
 
 source_download() {
 	_information $prefix "Téléchargement de la source"
@@ -56,6 +60,45 @@ source_postdecompress() {
 	done
 }
 
+check_dependencies(){
+	_information $prefix "Vérification des dépendances"
+	if [ ! -z $DEPENDS ]; then
+		for dependencies in ${DEPENDS[@]}
+		do
+			if [ ! -d $PKG_DB/$dependencies ]; then
+				_warning $prefix "Le paquet ${dependencies} n'est pas installé, Vérification dans le dépot"
+				if [ ! -d $PKG_DEPOT/$dependencies ]; then
+					_error $prefix "Le paquet ${dependencies} est inexistant"
+					exit 15
+				else
+					_warning $prefix "Merci d'installer le dépendances ${dependencies}"
+					exit 16
+				fi
+			fi
+		done
+	fi
+
+}
+
+find_runtime() {
+	_information $prefix "Vérification des dépendances runtime"
+	search=$(find $package_dir -type f \( -perm /+u+x -o -name '*.so' -o -name '*.so.*' \) 2>/dev/null)
+
+	package=$PKG_DB/*
+
+	for file in ${search[@]}
+	        do
+	                type="$(file -b $file | cut -d " " -f1)"
+	                if [ $type == ELF ]; then
+	                                dep="$(readelf -d ${file} | grep -i needed | cut -d ":" -f2 | cut -d " " -f2 | tr -d "[]")"
+	                                runtimedep+="$(grep -i "${dep}" $package/.PACKTREE | cut -d "/" -f4 | sed -r '/^\s*$/d') "
+	                fi
+	                unset type
+	        done
+
+	sortedruntimedep=$(echo -e ${runtimedep[@]} | tr " " "\n" | sort -u)
+}
+
 package_pack() {
 	_information $prefix "Empaquetage du paquet"
 	cd $package_dir
@@ -78,7 +121,27 @@ package_pack() {
 
 package_meta() {
 	cd $package_dir
-	echo "$NAME,$VERSION,$RELEASE" > .PACKMETA
+	echo -e "$NAME,$VERSION,$RELEASE,"${sortedruntimedep[@]} > .PACKMETA
+}
+
+strip_files() {
+	_information $prefix "Lancement de la fonction strip"
+	local FILE
+	
+	cd $package_dir
+
+	find . -type f -printf "%P\n" | cat | while read FILE; do
+		case $(file -b "$FILE") in
+		*ELF*executable*not\ stripped)
+			strip --strip-all "$FILE"
+			;;
+		*ELF*shared\ object*not\ stripped)
+			strip --strip-unneeded "$FILE"
+			;;
+		current\ ar\ archive)
+			strip --strip-debug "$FILE"
+		esac
+	done
 }
 
 package_move_depot() {
@@ -104,6 +167,7 @@ build_check() {
 pkg_build() {
 	build_init
 	build_check
+	check_dependencies
 	source_download
 	if [[ $? != 0 ]]; then
 		_error $prefix "Merci de vérifier l'url de la source."
@@ -151,17 +215,22 @@ pkg_build() {
 		_error $prefix "Erreur sur l'installation du paquet. Merci de vérifier la fonction do_install."
 		exit 7
 	fi
-	unset -f do_install
+	#Suppression des caractere de deboguage
+	strip_files
+	#Ajout des meta dans l'archives
+	find_runtime
 	package_meta
 	if [[ $? != 0 ]]; then
 		_error $prefix "Erreur sur la création du fichier .PACKMETA."
 		exit 8
 	fi
+	#Empaquetage de le compilation
 	package_pack
 	if [[ $? != 0 ]]; then
 		_error $prefix "Erreur sur l'empaquetage du paquet."
 		exit 8
 	fi
+	#Mise en dépot du paquets
 	package_move_depot
 	if [[ $? != 0 ]]; then
 		_error $prefix "Impossible de déplacer le binaire dans le dépôt. Merci de verifier les droits"
@@ -244,6 +313,7 @@ source $buildfile
 
 SRCNAME=""
 PKG_DEPOT="/var/pkg"
+PKG_DB="/var/db"
 user_dir=$(echo $HOME)
 build_arbo=$user_dir/yambuild
 build_dir=$user_dir/yambuild/$NAME/build
@@ -276,6 +346,10 @@ case $2 in
 	PACKDIR=/$build_arbo/package
 	export -f do_install
 	fakeroot /bin/bash -c "do_install"
+	;;
+"--runtime" | "-r")
+	find_runtime
+	echo "test,test,"${sortedruntimedep[@]}
 	;;
 "--build" | "-b")
 	pkg_build
