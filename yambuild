@@ -19,6 +19,23 @@ source_download() {
 						wget -c --no-check-certificate $i
 					fi
 					;;
+				git#*)
+					GITSOURCE="${i##*#}"
+					GITNAMESOURCE="${GITSOURCE##*/}"
+					GITFOLDERNAME=$(echo $GITNAMESOURCE | cut -d "." -f1)
+					_information $prefix "Clonage du dépôt"
+					if [ -d $GITFOLDERNAME ]; then
+						_warning $prefix "Nettoyage des anciennes sources"
+						rm -r $GITFOLDERNAME
+					fi
+					git clone $GITSOURCE
+					if [ $? != 0 ]; then
+						_error $prefix "Impossible de cloner le dépôt"
+						exit 17
+					else
+						cp -r $GITFOLDERNAME $build_dir
+					fi
+					;;
 				* | ".*")
 					_warning $prefix "Copie de la source ${NAMESOURCE} dans le dossier de compilation"
 					cp -rf $basedir/$i $build_dir
