@@ -141,10 +141,15 @@ package_meta() {
 	echo -e "$NAME,$VERSION,$RELEASE,"${sortedruntimedep[@]} > .PACKMETA
 }
 
+remove_la_file(){
+	_information $prefix "Suppression des fichiers .la"
+	find $package_dir ! -type d -name "*.la" -print -delete
+}
+
 strip_files() {
 	_information $prefix "Lancement de la fonction strip"
 	local FILE
-	
+
 	cd $package_dir
 
 	find . -type f -printf "%P\n" | cat | while read FILE; do
@@ -234,6 +239,8 @@ pkg_build() {
 	fi
 	#Suppression des caractere de deboguage
 	strip_files
+	#Suppression des fichiers .la
+	remove_la_file
 	#Ajout des meta dans l'archives
 	find_runtime
 	package_meta
