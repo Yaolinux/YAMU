@@ -114,6 +114,13 @@ find_runtime() {
 	        done
 
 	sortedruntimedep=$(echo -e ${runtimedep[@]} | tr " " "\n" | sort -u)
+
+	if [ -n $RUNTIMES ]; then
+		for runtimes in ${RUNTIMES[@]}
+		do
+			$sortedruntimedep+="$runtimes "
+		done
+	fi
 }
 
 package_pack() {
@@ -183,6 +190,7 @@ build_check() {
 	#[ -z $URL ] && _error $prefix "Variable URL vide"; exit 102
 	if [ -z $RELEASE ]; then RELEASE=1; fi
 	if [ -z $DEPENDS ]; then _information $prefix "Paquet sans dépendances"; fi
+	if [ -n $RUNTIMES ]; then _warning $prefix "Paquet avec des runtimes définies"; fi
 }
 
 
