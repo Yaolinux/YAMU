@@ -116,10 +116,11 @@ find_runtime() {
 	sortedruntimedep=$(echo -e ${runtimedep[@]} | tr " " "\n" | sort -u)
 
 	if [ -n $RUNTIMES ]; then
-		for runtimes in ${RUNTIMES[@]}
+		for loopRuntimes in ${RUNTIMES[@]}
 		do
-			$sortedruntimedep+="$runtimes "
+			manualruntime+=" ${loopRuntimes}"
 		done
+
 	fi
 }
 
@@ -145,7 +146,7 @@ package_pack() {
 
 package_meta() {
 	cd $package_dir
-	echo -e "$NAME,$VERSION,$RELEASE,"${sortedruntimedep[@]} > .PACKMETA
+	echo -e "$NAME,$VERSION,$RELEASE,"${sortedruntimedep[@]}${manualruntime[@]} > .PACKMETA
 }
 
 remove_la_file(){
