@@ -142,6 +142,14 @@ package_pack() {
 	fi
 	_information $prefix "Création de l'archive du paquet"
 	zstd -q --rm $TARFILE
+	generate_footprint "$TARFILE.zst"
+}
+
+generate_footprint() {
+	file=$1
+	if [ "$1" == *.tar.zst ]; then
+		md5sum $1 >> MD5CHECK
+	fi
 }
 
 package_meta() {
@@ -182,6 +190,7 @@ package_move_depot() {
 		rm -rf $PKG_DEPOT/$NAME/*
 	fi
 	mv -f $package_dir/$NAME-$VERSION-$RELEASE.tar.zst $PKG_DEPOT/$NAME
+	mv -f $package_dir/MD5CHECK $PKG_DEPOT/$NAME
 }
 
 build_check() {
