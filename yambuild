@@ -154,7 +154,7 @@ generate_footprint() {
 
 package_meta() {
 	cd $package_dir
-	echo -e "$NAME,$VERSION,$RELEASE,"${sortedruntimedep[@]}${manualruntime[@]} > .PACKMETA
+	echo -e "$NAME;$VERSION;$RELEASE;"${sortedruntimedep[@]}${manualruntime[@]}";"$DESCRIPTION";" > .PACKMETA
 }
 
 remove_la_file(){
@@ -197,12 +197,27 @@ build_check() {
 	_information $prefix "Vérification du fichier build"
 	if [ -z $NAME ]; then _error $prefix "Variable NAME vide"; exit 100; fi
 	if [ -z $VERSION ]; then _error $prefix "Variable VERSION vide"; exit 101; fi
-	#[ -z $URL ] && _error $prefix "Variable URL vide"; exit 102
 	if [ -z $RELEASE ]; then RELEASE=1; fi
 	if [ -z $DEPENDS ]; then _information $prefix "Paquet sans dépendances"; fi
 	if [ -n $RUNTIMES ]; then _warning $prefix "Paquet avec des runtimes définies"; fi
 }
 
+update_repofile() {
+	if [ -f $PKG_PACKREPO ]; then
+		cat $PKG_PACKREPO  | grep -i -w $1
+		if [ $? == 0 ]; then
+			line=$(cat $PKG_PACKREPO  | grep -ni -w $1 | cut -d ":" -f1)
+			echo "OK"
+			sed -i "${line} d" $PKG_PACKREPO
+			echo "$NAME;$VERSION;$RELEASE;"${sortedruntimedep[@]}${manualruntime[@]}";"$DESCRIPTION";" >> $PKG_PACKREPO
+		else
+			echo "NOK"
+			echo "$NAME;$VERSION;$RELEASE;"${sortedruntimedep[@]}${manualruntime[@]}";"$DESCRIPTION";" >> $PKG_PACKREPO
+		fi
+	else
+		touch $PKG_PACKREPO
+	fi
+}
 
 pkg_build() {
 	build_init
@@ -278,6 +293,7 @@ pkg_build() {
 		_error $prefix "Impossible de déplacer le binaire dans le dépôt. Merci de verifier les droits"
 		exit 9
 	fi
+	update_repofile $NAME
 
 }
 
@@ -356,6 +372,7 @@ source $buildfile
 SRCNAME=""
 PKG_DEPOT="/var/pkg"
 PKG_DB="/var/db"
+PKG_PACKREPO=/var/pkg/.PACKREPO
 user_dir=$(echo $HOME)
 build_arbo=$user_dir/yambuild
 build_dir=$user_dir/yambuild/$NAME/build
