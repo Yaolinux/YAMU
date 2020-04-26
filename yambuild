@@ -207,12 +207,10 @@ update_repofile() {
 		cat $PKG_PACKREPO  | grep -i -w $1
 		if [ $? == 0 ]; then
 			line=$(cat $PKG_PACKREPO  | grep -ni -w $1 | cut -d ":" -f1)
-			echo "OK"
 			sed -i "${line} d" $PKG_PACKREPO
-			echo "$NAME;$VERSION;$RELEASE;"${sortedruntimedep[@]}${manualruntime[@]}";"$DESCRIPTION";" >> $PKG_PACKREPO
+			echo -e "$NAME;$VERSION;$RELEASE;"${sortedruntimedep[@]}${manualruntime[@]}";"$DESCRIPTION";" >> $PKG_PACKREPO
 		else
-			echo "NOK"
-			echo "$NAME;$VERSION;$RELEASE;"${sortedruntimedep[@]}${manualruntime[@]}";"$DESCRIPTION";" >> $PKG_PACKREPO
+			echo -e "$NAME;$VERSION;$RELEASE;"${sortedruntimedep[@]}${manualruntime[@]}";"$DESCRIPTION";" >> $PKG_PACKREPO
 		fi
 	else
 		touch $PKG_PACKREPO
@@ -304,8 +302,19 @@ build_init() {
 		_error $prefix "Merci de verifier la présence de Fakeroot"
 		exit 12
 	fi
-	_information $prefix "Chargement de la confiugration de YAMU"
-	source yamu.conf
+	_information $prefix "Chargement de la confiugration de YAMUBUILD"
+	if [ ! -e yambuild.conf ]; then
+		touch yambuild.conf
+	fi
+	source yambuild.conf
+	if [ -z $YAMBUILD_PKGDIR ]; then
+		YAMBUILD_PKGDIR="/srv/pkg"
+
+	fi
+
+	PKG_DEPOT="${YAMBUILD_PKGDIR}/${ARCH}"
+	PKG_PACKREPO="${PKG_DEPOT}/.PACKREPO"
+
 	if [ -z $MAKECORE ]; then
 		NBCORE=$(nproc)
 		export MAKEFLAGS="-j ${NBCORE}"
@@ -313,11 +322,11 @@ build_init() {
 		export MAKEFLAGS="-j ${MAKECORE}"
 	fi
 	_information $prefix "Vérification des droits"
-	if [ ! -d /var/pkg ]; then
-		_error $prefix "Le dossier /var/pkg n'existe pas, merci de le créer"
+	if [ ! -d $PKG_DEPOT ]; then
+		_error $prefix "Le dossier ${PKG_DEPOT} n'existe pas, merci de le créer"
 		exit 10
-	elif [  ! -w /var/pkg ]; then
-		_error $prefix "Le dossier /var/pkg n''est pas inscriptible, merci de vérifier les droits"
+	elif [  ! -w $PKG_DEPOT ]; then
+		_error $prefix "Le dossier ${PKG_DEPOT} n'est pas inscriptible, merci de vérifier les droits"
 		exit 11
 	fi
 
@@ -370,9 +379,8 @@ source yamutils
 source $buildfile
 
 SRCNAME=""
-PKG_DEPOT="/var/pkg"
-PKG_DB="/var/db"
-PKG_PACKREPO=/var/pkg/.PACKREPO
+ARCH=$(uname -m)
+PKG_DB="/var/pkg/db"
 user_dir=$(echo $HOME)
 build_arbo=$user_dir/yambuild
 build_dir=$user_dir/yambuild/$NAME/build
@@ -384,32 +392,6 @@ if [[ $user_dir == "/root" ]]; then
 fi
 
 case $2 in
-"--download" | "-do")
-	build_init
-	source_download
-	;;
-"--decompress" | "-de")
-	source_decompress
-	source_postdecompress
-	;;
-"--prepare" | "-p")
-	do_prepare
-	;;
-"--make" | "-m")
-	do_make
-	;;
-"--check" | "-c")
-	do_check
-	;;
-"--install" | "-i")
-	PACKDIR=/$build_arbo/package
-	export -f do_install
-	fakeroot /bin/bash -c "do_install"
-	;;
-"--runtime" | "-r")
-	find_runtime
-	echo "test,test,"${sortedruntimedep[@]}
-	;;
 "--build" | "-b")
 	pkg_build
 	;;
