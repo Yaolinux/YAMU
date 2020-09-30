@@ -100,9 +100,9 @@ check_dependencies(){
 find_runtime() {
 	_information $prefix "Vérification des dépendances runtime"
 	search=$(find $package_dir -type f \( -perm /+u+x -o -name '*.so' -o -name '*.so.*' \) 2>/dev/null)
-
+	echo $package_dir
 	package=$PKG_DB/*
-
+	echo $package
 	for file in ${search[@]}
 	        do
 	                type="$(file -b $file | cut -d " " -f1)"
@@ -113,11 +113,16 @@ find_runtime() {
 	                unset type
 	        done
 
+	echo ${runtimedep[@]}
+
 	sortedruntimedep=$(echo -e ${runtimedep[@]} | tr " " "\n" | sort -u)
+
+	echo -e ${sortedruntimedep[@]}
 
 	if [ -n $RUNTIMES ]; then
 		for loopRuntimes in ${RUNTIMES[@]}
 		do
+			echo $loopRuntimes
 			manualruntime+=" ${loopRuntimes}"
 		done
 
@@ -127,8 +132,8 @@ find_runtime() {
 package_pack() {
 	_information $prefix "Empaquetage du paquet"
 	cd $package_dir
-	TARFILE=$NAME-$VERSION-$RELEASE.tar
-	tar --no-same-owner -cf $NAME-$VERSION-$RELEASE.tar *
+	TARFILE=$NAME-$VERSION-$RELEASE-$TIMESTAMP.tar
+	tar --no-same-owner -cf $NAME-$VERSION-$RELEASE-$TIMESTAMP.tar *
 	if [ $? != 0 ]; then
 		_error $prefix "Erreur sur l'empaquetage, vérifier la fonction do_install"
 		exit 14
@@ -154,7 +159,7 @@ generate_footprint() {
 
 package_meta() {
 	cd $package_dir
-	echo -e "$NAME;$VERSION;$RELEASE;"${sortedruntimedep[@]}${manualruntime[@]}";"$DESCRIPTION";" > .PACKMETA
+	echo -e "$NAME;$VERSION;$RELEASE;${sortedruntimedep[@]};$DESCRIPTION" > .PACKMETA
 }
 
 remove_la_file(){
@@ -189,7 +194,7 @@ package_move_depot() {
 	else
 		rm -rf $PKG_DEPOT/$NAME/*
 	fi
-	mv -f $package_dir/$NAME-$VERSION-$RELEASE.tar.zst $PKG_DEPOT/$NAME
+	mv -f $package_dir/$NAME-$VERSION-$RELEASE-$TIMESTAMP.tar.zst $PKG_DEPOT/$NAME
 	mv -f $package_dir/MD5CHECK $PKG_DEPOT/$NAME
 }
 
@@ -208,9 +213,9 @@ update_repofile() {
 		if [ $? == 0 ]; then
 			line=$(cat $PKG_PACKREPO  | grep -ni -w $1 | cut -d ":" -f1)
 			sed -i "${line} d" $PKG_PACKREPO
-			echo -e "$NAME;$VERSION;$RELEASE;"${sortedruntimedep[@]}${manualruntime[@]}";"$DESCRIPTION";" >> $PKG_PACKREPO
+			echo -e "$NAME;$VERSION;$RELEASE;${sortedruntimedep[@]}${manualruntime[@]};$DESCRIPTION;${TARFILE}.zst" >> $PKG_PACKREPO
 		else
-			echo -e "$NAME;$VERSION;$RELEASE;"${sortedruntimedep[@]}${manualruntime[@]}";"$DESCRIPTION";" >> $PKG_PACKREPO
+			echo -e "$NAME;$VERSION;$RELEASE;${sortedruntimedep[@]}${manualruntime[@]};$DESCRIPTION;${TARFILE}.zst" >> $PKG_PACKREPO
 		fi
 	else
 		touch $PKG_PACKREPO
@@ -218,7 +223,7 @@ update_repofile() {
 }
 
 pkg_build() {
-	build_init
+	#build_init
 	build_check
 	check_dependencies
 	source_download
@@ -302,7 +307,7 @@ build_init() {
 		_error $prefix "Merci de verifier la présence de Fakeroot"
 		exit 12
 	fi
-	_information $prefix "Chargement de la confiugration de YAMUBUILD"
+	_information $prefix "Chargement de la configuration de YAMUBUILD"
 	if [ ! -e yambuild.conf ]; then
 		touch yambuild.conf
 	fi
@@ -314,6 +319,7 @@ build_init() {
 
 	PKG_DEPOT="${YAMBUILD_PKGDIR}/${ARCH}"
 	PKG_PACKREPO="${PKG_DEPOT}/.PACKREPO"
+	PKG_LOG="${YAMBUILD_PKGDIR}/logs"
 
 	if [ -z $MAKECORE ]; then
 		NBCORE=$(nproc)
@@ -369,6 +375,9 @@ help() {
 	echo -e "--install ou -i : Lance la fonction install du build"
 }
 
+#main() {
+#}
+
 prefix="YAMBUILD"
 
 basedir=$PWD/$1
@@ -380,11 +389,14 @@ source $buildfile
 
 SRCNAME=""
 ARCH=$(uname -m)
-PKG_DB="/var/pkg/db"
+PKG_DB="/var/db"
+TIMESTAMP=$(date +%s)
 user_dir=$(echo $HOME)
 build_arbo=$user_dir/yambuild
 build_dir=$user_dir/yambuild/$NAME/build
 package_dir=$user_dir/yambuild/$NAME/package
+
+#main"$@"
 
 if [[ $user_dir == "/root" ]]; then
 	_error $prefix "La compilation ne fait pas en root !"
@@ -392,10 +404,11 @@ if [[ $user_dir == "/root" ]]; then
 fi
 
 case $2 in
-"--build" | "-b")
-	pkg_build
-	;;
-*)
-	pkg_build
-	;;
+	"--build" | "-b")
+		pkg_build
+		;;
+	*)
+		build_init
+		pkg_build 2>&1|tee ${PKG_LOG}/$NAME.log || exit 1;;
 esac
+
