@@ -104,7 +104,6 @@ is_root
 			done
 			;;
 		*)
-			echo "Je nique des mères pour1 compiler !"
 			TARGET_FOLDER=$1
 			search_depends $TARGET_FOLDER
 			check_database
