@@ -22,5 +22,12 @@ _error() {
 	echo -e "${red}==> $@ ${normal}"
 }
 
+is_root() {
+        YAMU_USER_EUID=$(echo $EUID)
+        if [ $YAMU_USER_EUID -ne 0 ]; then
+                _error $YAMU_PREFIX "Veuillez executer cette comande en root ou sudo"
+                exit 1
+        fi
+}
 
 YAMU_PREFIX="YAMU"

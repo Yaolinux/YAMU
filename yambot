@@ -1,0 +1,121 @@
+#!/bin/bash
+# YAMU build bot
+# Created at :
+# Created by :
+# Modified at :
+
+source yamutils
+
+[[ -z $ARCH ]] && ARCH=$(uname -m)
+[[ -z $SRV_DEST ]] && SRV_DEST="/srv/pkg"
+
+PREFIX="YAMBOT"
+
+SRV_LOG="${SRV_DEST}/log"
+SRV_BINARY="${SRV_DEST}/${ARCH}"
+
+LEVEL_PACKAGE=()
+COMPILED_PACKAGE=()
+
+search_depends() {
+	if [ -d $1 ]
+	then
+		for package in $1/*
+		do
+			source $package/build
+			[[ -z $DEPENDS ]] && DEPENDS=()
+			local NB_DEPS=${#DEPENDS[@]}
+			LEVEL_PACKAGE+=("$NB_DEPS|$package")
+			unset NB_DEPS
+		done
+	else
+		echo "Dossier inexistant"
+	fi
+
+
+	IFS=$'\n' LEVEL_SORTED=($(sort <<<"${LEVEL_PACKAGE[*]}"))
+	unset IFS
+
+}
+
+check_database() {
+	if [ -f $SRV_BINARY/.PACKREPO ]
+	then
+		while read line
+		do
+			local FIND_COMPILED_PACKAGE=$(echo $line | cut -d ";" -f 1)
+			COMPILED_PACKAGE+=("$FIND_COMPILED_PACKAGE")
+		done < $SRV_BINARY/.PACKREPO
+	fi
+	echo ${COMPILED_PACKAGE[@]}
+}
+
+compile() {
+	local TARGET_COMPILE=$1
+	local NB_DEPS=$(echo $TARGET_COMPILE | cut -d "|" -f1)
+	local PACKAGE_COMPILE=$(echo $TARGET_COMPILE | cut -d "|" -f2)
+
+	if [ $NB_DEPS == 0 ]
+	then
+		echo "Compile ${PACKAGE_COMPILE} avec 0 deps"
+		#fakeroot ./yambuild $PACKAGE_COMPILE
+	else
+		echo "Compile ${PACKAGE_COMPILE} avec ${NB_DEPS} deps"
+		source $PACKAGE_COMPILE/build
+		for DEPS in ${DEPENDS[@]}
+		do
+			if [ -d $SRV_BINARY/$DEPS ]
+			then
+				echo "${DEPS} dependances à installer"
+			else
+				echo "${DEPS} dependances à compiler"
+			fi
+		done
+	fi
+	unset NB_DEPS
+	unset PACKAGE_COMPILE
+}
+
+is_root
+	case $1 in
+		-i|--init)
+			echo "Initialisation du YAMBOT"
+			if [ ! -d $SRV_DEST ]
+			then
+				mkdir -v $SRV_DEST
+			fi
+			if [ ! -d $SRV_LOG ]
+                        then
+                                mkdir -v $SRV_LOG
+                        fi
+			if [ ! -d $SRV_BINARY ]
+                        then
+                                mkdir -v $SRV_BINARY
+                        fi
+			;;
+		-cd|--calcul-deps)
+			TARGET_FOLDER=$2
+			search_depends $TARGET_FOLDER
+			for LEVEL in ${LEVEL_SORTED[@]}
+			do
+				NB_DEPS=$(echo $LEVEL | cut -d "|" -f1)
+			        PACKAGE_COMPILE=$(echo $LEVEL | cut -d "|" -f2)
+				echo "Level ${NB_DEPS} - ${PACKAGE_COMPILE}"
+			done
+			;;
+		*)
+			echo "Je nique des mères pour1 compiler !"
+			TARGET_FOLDER=$1
+			search_depends $TARGET_FOLDER
+			check_database
+			for COMPILE_PACK in ${LEVEL_SORTED[@]}
+			do
+				compile $COMPILE_PACK
+				if [ $? != 0 ]
+				then
+					exit 1
+					echo "==> ${PREFIX} Erreur dans la compilation"
+				fi
+			done
+		;;
+	esac

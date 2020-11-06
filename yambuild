@@ -206,9 +206,9 @@ update_repofile() {
 		if [ $? == 0 ]; then
 			line=$(cat $PKG_PACKREPO  | grep -ni -w $1 | cut -d ":" -f1)
 			sed -i "${line} d" $PKG_PACKREPO
-			echo -e "$NAME;$VERSION;$RELEASE;${sortedruntimedep[@]}${manualruntime[@]};$DESCRIPTION;${TIMESTAMP};${TARFILE}.zst" >> $PKG_PACKREPO
+			echo "$NAME;$VERSION;$RELEASE;${sortedruntimedep[@]}${manualruntime[@]};$DESCRIPTION;${TIMESTAMP};${TARFILE}.zst" >> $PKG_PACKREPO
 		else
-			echo -e "$NAME;$VERSION;$RELEASE;${sortedruntimedep[@]}${manualruntime[@]};$DESCRIPTION;${TIMESTAMP};${TARFILE}.zst" >> $PKG_PACKREPO
+			echo "$NAME;$VERSION;$RELEASE;${sortedruntimedep[@]}${manualruntime[@]};$DESCRIPTION;${TIMESTAMP};${TARFILE}.zst" >> $PKG_PACKREPO
 		fi
 	else
 		touch $PKG_PACKREPO
