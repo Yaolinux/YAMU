@@ -180,17 +180,6 @@ strip_files() {
 	done
 }
 
-package_move_depot() {
-	_information $prefix "Déplacement du binaire dans le dépot local"
-	if [ ! -d $PKG_DEPOT/$NAME ]; then
-		mkdir $PKG_DEPOT/$NAME
-	else
-		rm -rf $PKG_DEPOT/$NAME/*
-	fi
-	mv -f $package_dir/$NAME-$VERSION-$RELEASE-$TIMESTAMP.tar.zst $PKG_DEPOT/$NAME
-	mv -f $package_dir/MD5CHECK $PKG_DEPOT/$NAME
-}
-
 build_check() {
 	_information $prefix "Vérification du fichier build"
 	if [ -z $NAME ]; then _error $prefix "Variable NAME vide"; exit 100; fi
@@ -267,12 +256,6 @@ pkg_build() {
 	if [[ $? != 0 ]]; then
 		_error $prefix "Erreur sur l'empaquetage du paquet."
 		exit 8
-	fi
-	#Mise en dépot du paquets
-	package_move_depot
-	if [[ $? != 0 ]]; then
-		_error $prefix "Impossible de déplacer le binaire dans le dépôt. Merci de verifier les droits"
-		exit 9
 	fi
 }
 
