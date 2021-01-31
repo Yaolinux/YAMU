@@ -100,13 +100,15 @@ check_dependencies(){
 find_runtime() {
 	_information $prefix "Vérification des dépendances runtime"
 	search=$(find $package_dir -type f \( -perm /+u+x -o -name '*.so' -o -name '*.so.*' \) 2>/dev/null)
-	package=$PKG_DB/*
 	for file in ${search[@]}
 	        do
 	                type="$(file -b $file | cut -d " " -f1)"
 	                if [ $type == ELF ]; then
 	                                dep="$(readelf -d ${file} | grep -i needed | cut -d ":" -f2 | cut -d " " -f2 | tr -d "[]")"
-	                                runtimedep+="$(grep -i "${dep}" $package/.PACKTREE | cut -d "/" -f4 | sed -r '/^\s*$/d') "
+					for pkg_dir in $PKG_DB/*
+					do
+		                                runtimedep+="$(grep -i "${dep}" "${pkg_dir}"/.PACKTREE | cut -d "/" -f4 | sed -r '/^\s*$/d') "
+					done
 	                fi
 	                unset type
 	        done
@@ -287,14 +289,6 @@ build_init() {
 		export MAKEFLAGS="-j ${MAKECORE}"
 	fi
 	_information $prefix "Vérification des droits"
-	if [ ! -d $PKG_DEPOT ]; then
-		_error $prefix "Le dossier ${PKG_DEPOT} n'existe pas, merci de le créer"
-		exit 10
-	elif [  ! -w $PKG_DEPOT ]; then
-		_error $prefix "Le dossier ${PKG_DEPOT} n'est pas inscriptible, merci de vérifier les droits"
-		exit 11
-	fi
-
 	_information $prefix "Suppression des anciens dossiers"
 	if [ -d "${build_arbo}/${NAME}" ];
 	then
