@@ -2,11 +2,11 @@
 # YAMBUILD : 
 # Created by : Yaolinux Team
 # Created at : 30/04/2020
-# Modified at : 08/04/2020
+# Modified at : 20/06/2022
 
 source_download() {
-	_information $prefix "Téléchargement de la source"
-	cd $build_arbo/$NAME/sources
+	_information $prefix "Download the source"
+	cd $BUILD_ARBO/$NAME/sources
 	for i in "${URL[@]}";
 	do
 		NAMESOURCE=" ${i##*/}"
@@ -15,7 +15,7 @@ source_download() {
 				http://*|https://*|ftp://*)
 					wget -c $i
 					if [[ $? != 0 ]]; then
-						_warning $prefix "Le certificat de la source n'est pas correct."
+						_warning $prefix "The certificate is not valid"
 						wget -c --no-check-certificate $i
 					fi
 					;;
@@ -23,44 +23,44 @@ source_download() {
 					GITSOURCE="${i##*#}"
 					GITNAMESOURCE="${GITSOURCE##*/}"
 					GITFOLDERNAME=$(echo $GITNAMESOURCE | cut -d "." -f1)
-					_information $prefix "Clonage du dépôt"
+					_information $prefix "Clone the repo"
 					if [ -d $GITFOLDERNAME ]; then
-						_warning $prefix "Nettoyage des anciennes sources"
+						_warning $prefix "Clean the old sources"
 						rm -r $GITFOLDERNAME
 					fi
 					git clone $GITSOURCE
 					if [ $? != 0 ]; then
-						_error $prefix "Impossible de cloner le dépôt"
+						_error $prefix "Impossible to clone the repo"
 						exit 17
 					else
-						cp -r $GITFOLDERNAME $build_dir
+						cp -r $GITFOLDERNAME $BUILD_DIR
 					fi
 					;;
 				* | ".*")
 					_warning $prefix "Copie de la source ${NAMESOURCE} dans le dossier de compilation"
-					cp -rf $basedir/$i $build_dir
+					cp -rf $basedir/$i $BUILD_DIR
 					;;
 			esac
 		else
-			_information $prefix "La source est déjà éxistante"
+			_information $prefix "The source only exist"
 		fi
 		SRCNAME+=" ${i##*/}"
 	done
 }
 
 source_decompress() {
-	_information $prefix "Décompression des sources"
-	cd $build_arbo/$NAME/sources
+	_information $prefix "Uncompress the source"
+	cd $BUILD_ARBO/$NAME/sources
 	for tarball in ${SRCNAME[@]};
 	do
 		case $tarball in
 			*.tar|*.tar.gz|*.tar.Z|*.tgz|*.tar.bz2|*.tbz2|*.tbz|*.tar.xz|*.txz|*.tar.lzma|*.tar.lz)
-				tar xf $tarball -C $build_arbo/$NAME/build
+				tar xf $tarball -C $BUILD_ARBO/$NAME/build
 				;;
 			*)
 				#_warning $prefix "Fichier ou archive ${tarball} non pris en charge"
 				if [ $tarball == ".install" ]; then
-					cp -rf $build_dir/$tarball $package_dir
+					cp -rf $BUILD_DIR/$tarball $PACKAGE_DIR
 				fi
 				;;
 
@@ -69,8 +69,8 @@ source_decompress() {
 }
 
 source_postdecompress() {
-	_information $prefix "Vérification des sources"
-	cd $build_arbo/$NAME/sources
+	_information $prefix "Check akll sources"
+	cd $BUILD_ARBO/$NAME/sources
 	for tarball in $TAR;
 	do
 		folder_pkg=$(tar tf $tarball | head -1)
@@ -78,7 +78,7 @@ source_postdecompress() {
 }
 
 check_dependencies(){
-	_information $prefix "Vérification des dépendances"
+	_information $prefix "Check all dependances"
 	if [ ! -z $DEPENDS ]; then
 		for dependencies in ${DEPENDS[@]}
 		do
@@ -88,7 +88,7 @@ check_dependencies(){
 					_error $prefix "Le paquet ${dependencies} est inexistant"
 					exit 15
 				else
-					_warning $prefix "Merci d'installer le dépendances ${dependencies}"
+					_warning $prefix "Please install depends ${dependencies}"
 					exit 16
 				fi
 			fi
@@ -99,17 +99,17 @@ check_dependencies(){
 
 find_runtime() {
 	_information $prefix "Vérification des dépendances runtime"
-	search=$(find $package_dir -type f \( -perm /+u+x -o -name '*.so' -o -name '*.so.*' \) 2>/dev/null)
+	search=$(find $PACKAGE_DIR -type f \( -perm /+u+x -o -name '*.so' -o -name '*.so.*' \) 2>/dev/null)
 	package=$PKG_DB/*
 	for file in ${search[@]}
-	        do
-	                type="$(file -b $file | cut -d " " -f1)"
-	                if [ $type == ELF ]; then
-	                                dep="$(readelf -d ${file} | grep -i needed | cut -d ":" -f2 | cut -d " " -f2 | tr -d "[]")"
-	                                runtimedep+="$(grep -i "${dep}" $package/.PACKTREE | cut -d "/" -f4 | sed -r '/^\s*$/d') "
-	                fi
-	                unset type
-	        done
+		do
+			type="$(file -b $file | cut -d " " -f1)"
+				if [ $type == ELF ]; then
+					dep="$(readelf -d ${file} | grep -i needed | cut -d ":" -f2 | cut -d " " -f2 | tr -d "[]")"
+					runtimedep+="$(grep -i "${dep}" $package/.PACKTREE | cut -d "/" -f4 | sed -r '/^\s*$/d') "
+				fi
+			unset type
+		done
 
 	sortedruntimedep=$(echo -e ${runtimedep[@]} | tr " " "\n" | sort -u)
 
@@ -118,15 +118,14 @@ find_runtime() {
 		do
 			manualruntime+=" ${loopRuntimes}"
 		done
-
 	fi
 }
 
 package_pack() {
 	_information $prefix "Empaquetage du paquet"
-	cd $package_dir
-	TARFILE=$NAME-$VERSION-$RELEASE-$TIMESTAMP.tar
-	tar --no-same-owner -cf $NAME-$VERSION-$RELEASE-$TIMESTAMP.tar *
+	cd $PACKAGE_DIR
+	TARFILE="$NAME-$VERSION-$RELEASE-$TIMESTAMP.tar"
+	tar --no-same-owner -cf $TARFILE *
 	if [ $? != 0 ]; then
 		_error $prefix "Erreur sur l'empaquetage, vérifier la fonction do_install"
 		exit 14
@@ -145,26 +144,26 @@ package_pack() {
 
 generate_footprint() {
 	file=$1
-	if [ "$1" == *.tar.zst ]; then
+	if [[ "$1" == *.tar.zst ]]; then
 		md5sum $1 >> MD5CHECK
 	fi
 }
 
 package_meta() {
-	cd $package_dir
+	cd $PACKAGE_DIR
 	echo -e "$NAME;$VERSION;$RELEASE;${sortedruntimedep[@]};$DESCRIPTION" > .PACKMETA
 }
 
 remove_la_file(){
 	_information $prefix "Suppression des fichiers .la"
-	find $package_dir ! -type d -name "*.la" -print -delete
+	find $PACKAGE_DIR ! -type d -name "*.la" -print -delete
 }
 
 strip_files() {
 	_information $prefix "Lancement de la fonction strip"
 	local FILE
 
-	cd $package_dir
+	cd $PACKAGE_DIR
 
 	find . -type f -printf "%P\n" | cat | while read FILE; do
 		case $(file -b "$FILE") in
@@ -180,17 +179,6 @@ strip_files() {
 	done
 }
 
-package_move_depot() {
-	_information $prefix "Déplacement du binaire dans le dépot local"
-	if [ ! -d $PKG_DEPOT/$NAME ]; then
-		mkdir $PKG_DEPOT/$NAME
-	else
-		rm -rf $PKG_DEPOT/$NAME/*
-	fi
-	mv -f $package_dir/$NAME-$VERSION-$RELEASE-$TIMESTAMP.tar.zst $PKG_DEPOT/$NAME
-	mv -f $package_dir/MD5CHECK $PKG_DEPOT/$NAME
-}
-
 build_check() {
 	_information $prefix "Vérification du fichier build"
 	if [ -z $NAME ]; then _error $prefix "Variable NAME vide"; exit 100; fi
@@ -198,21 +186,6 @@ build_check() {
 	if [ -z $RELEASE ]; then RELEASE=1; fi
 	if [ -z $DEPENDS ]; then _information $prefix "Paquet sans dépendances"; fi
 	if [ -n $RUNTIMES ]; then _warning $prefix "Paquet avec des runtimes définies"; fi
-}
-
-update_repofile() {
-	if [ -f $PKG_PACKREPO ]; then
-		cat $PKG_PACKREPO  | grep -i -w $1
-		if [ $? == 0 ]; then
-			line=$(cat $PKG_PACKREPO  | grep -ni -w $1 | cut -d ":" -f1)
-			sed -i "${line} d" $PKG_PACKREPO
-			echo "$NAME;$VERSION;$RELEASE;${sortedruntimedep[@]}${manualruntime[@]};$DESCRIPTION;${TIMESTAMP};${TARFILE}.zst" >> $PKG_PACKREPO
-		else
-			echo "$NAME;$VERSION;$RELEASE;${sortedruntimedep[@]}${manualruntime[@]};$DESCRIPTION;${TIMESTAMP};${TARFILE}.zst" >> $PKG_PACKREPO
-		fi
-	else
-		touch $PKG_PACKREPO
-	fi
 }
 
 pkg_build() {
@@ -234,12 +207,12 @@ pkg_build() {
 		_error $prefix "Erreur sur la post décompression."
 		exit 3
 	fi
-	cd $build_dir/
+	cd $BUILD_DIR/
 	if [[ $? != 0 ]]; then
 		_error $prefix "Le dossier contentant les sources est inexistant."
 		exit 4
 	fi
-	PACKDIR=$package_dir
+	PACKDIR=$PACKAGE_DIR
 	#Verification de l'existance de la fonction do_prepare dans la recette.
 	if exist_function "do_prepare" ; then
 		do_prepare
@@ -253,18 +226,21 @@ pkg_build() {
 		_error $prefix "Erreur sur la compilation de la recette. Merci de vérifier la fonction do_build."
 		exit 6
 	fi
-	#Verification de l'existance de la fonction do_check dans la recette.
+	#Check if do_check is present
 	if exist_function "do_check" ; then
 		do_check
 		if [[ $? != 0 ]]; then
-                        _error $prefix "Erreur sur la préparation de la recette. Merci de vérifier la fonction do_prepare."
-                        exit 5
-                fi
-        fi
-	do_install
-	if [[ $? != 0 ]]; then
-		_error $prefix "Erreur sur l'installation du paquet. Merci de vérifier la fonction do_install."
-		exit 7
+			_error $prefix "Erreur sur la préparation de la recette. Merci de vérifier la fonction do_prepare."
+			exit 5
+		fi
+    fi
+	#Check if do_install is present
+	if exist_function "do_install" ; then
+		do_install
+		if [[ $? != 0 ]]; then
+			_error $prefix "Erreur sur l'installation du paquet. Merci de vérifier la fonction do_install."
+			exit 7
+		fi
 	fi
 	#Suppression des caractere de deboguage
 	strip_files
@@ -283,27 +259,15 @@ pkg_build() {
 		_error $prefix "Erreur sur l'empaquetage du paquet."
 		exit 8
 	fi
-	#Mise en dépot du paquets
-	package_move_depot
-	if [[ $? != 0 ]]; then
-		_error $prefix "Impossible de déplacer le binaire dans le dépôt. Merci de verifier les droits"
-		exit 9
-	fi
-	update_repofile $NAME
-
 }
 
 build_init() {
-	_information $prefix "Verification de la présence des utilitaires obligatoires"
-	fakeroot -v > /dev/null 2>&1
-	if [ $? != 0 ]; then
-		_error $prefix "Merci de verifier la présence de Fakeroot"
-		exit 12
-	fi
+
 	_information $prefix "Chargement de la configuration de YAMUBUILD"
 	if [ ! -e yambuild.conf ]; then
 		touch yambuild.conf
 	fi
+	
 	source yambuild.conf
 	if [ -z $YAMBUILD_PKGDIR ]; then
 		YAMBUILD_PKGDIR="/srv/pkg"
@@ -311,7 +275,6 @@ build_init() {
 	fi
 
 	PKG_DEPOT="${YAMBUILD_PKGDIR}/${ARCH}"
-	PKG_PACKREPO="${PKG_DEPOT}/.PACKREPO"
 	PKG_LOG="${YAMBUILD_PKGDIR}/logs"
 
 	if [ -z $MAKECORE ]; then
@@ -330,17 +293,17 @@ build_init() {
 	fi
 
 	_information $prefix "Suppression des anciens dossiers"
-	if [ -d "${build_arbo}/${NAME}" ];
+	if [ -d "${BUILD_ARBO}/${NAME}" ];
 	then
-		rm -rf $build_arbo/$NAME/{build,package}/*
+		rm -rf $BUILD_ARBO/$NAME/{build,package}/*
 	else
 
 		_information $prefix "Création des dossiers necessaires à la compilation"
 
-		mkdir -pv $build_arbo/$NAME/
-		mkdir -pv $build_arbo/$NAME/sources
-		mkdir -pv $build_arbo/$NAME/build
-		mkdir -pv $build_arbo/$NAME/package
+		mkdir -pv $BUILD_ARBO/$NAME/
+		mkdir -pv $BUILD_ARBO/$NAME/sources
+		mkdir -pv $BUILD_ARBO/$NAME/build
+		mkdir -pv $BUILD_ARBO/$NAME/package
 	fi
 }
 
@@ -375,7 +338,6 @@ prefix="YAMBUILD"
 
 basedir=$PWD/$1
 buildfile=$1/build
-option=$2
 
 source yamutils
 source $buildfile
@@ -384,14 +346,14 @@ SRCNAME=""
 ARCH=$(uname -m)
 PKG_DB="/var/db"
 TIMESTAMP=$(date +%s)
-user_dir=$(echo $HOME)
-build_arbo=$user_dir/yambuild
-build_dir=$user_dir/yambuild/$NAME/build
-package_dir=$user_dir/yambuild/$NAME/package
+USER_DIR=$(echo $HOME)
+BUILD_ARBO=$USER_DIR/yambuild
+BUILD_DIR=$USER_DIR/yambuild/$NAME/build
+PACKAGE_DIR=$USER_DIR/yambuild/$NAME/package
 
 #main"$@"
 
-if [[ $user_dir == "/root" ]]; then
+if [[ $USER_DIR == "/root" ]]; then
 	_error $prefix "La compilation ne fait pas en root !"
 	#exit 9
 fi
@@ -402,6 +364,6 @@ case $2 in
 		;;
 	*)
 		build_init
-		pkg_build 2>&1|tee ${PKG_LOG}/$NAME.log || exit 1;;
+		pkg_build
 esac
 
